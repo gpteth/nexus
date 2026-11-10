@@ -1,0 +1,87 @@
+# Nexus 示例配置
+# 复制为 config.yaml 并按需修改。支持 ${ENV_VAR} 形式的环境变量展开。
+
+server:
+  listen: ":8080"
+  read_timeout: "15s"
+  write_timeout: "10m"      # 流式响应需要较长写超时
+  idle_timeout: "60s"
+  shutdown_timeout: "20s"
+  cors_allow_origins: ["*"]
+
+log:
+  level: "info"              # debug | info | warn | error
+  format: "json"             # json | text
+
+gateway:
+  default_timeout: "120s"
+
+  retry:
+    max_attempts: 3
+    base_delay: "500ms"
+    max_delay: "5s"
+
+  breaker:
+    failure_threshold: 5
+    open_duration: "30s"
+    half_open_probes: 1
+
+  ratelimit:
+    enabled: true
+    requests_per_minute: 600   # 全局默认，可被租户/密钥覆盖
+
+  # 模型上游：通用 OpenAI 兼容适配器，可对接任意 OpenAI Chat 协议端点
+  upstreams:
+    - name: "deepseek"
+      type: "openai"
+      base_url: "https://api.deepseek.com"
+      api_key: "${DEEPSEEK_API_KEY}"
+      weight: 1
+      max_connections: 100
+      models:
+        - "deepseek-chat"
+        - "deepseek-reasoner"
+
+    - name: "openai"
+      type: "openai"
+      base_url: "https://api.openai.com/v1"
+      api_key: "${OPENAI_API_KEY}"
+      weight: 1
+      max_connections: 100
+      models:
+        - "gpt-4o"
+        - "gpt-4o-mini"
+
+    - name: "local-vllm"
+      type: "openai"
+      base_url: "http://127.0.0.1:8000/v1"
+      api_key: ""              # 本地推理可留空
+      weight: 2
+      models:
+        - "local-llama-8b"
+
+  # 显式路由：把一个逻辑模型映射到多个等价上游（故障自动切换/负载均衡）
+  routes:
+    - model: "gpt-4o"
+      strategy: "weighted_round_robin"   # weighted_round_robin | least_connections | random
+      upstreams: ["openai"]
+
+# 平台数据面密钥（客户端访问 Nexus 时携带的 Bearer Token）
+auth:
+  keys:
+    - key: "sk-nexus-demo-0001"
+      tenant: "default"
+      enabled: true
+      requests_per_minute: 300
+      # models: ["deepseek-chat"]   # 留空表示不限制
+
+# 租户与配额
+tenants:
+  - id: "default"
+    name: "Default Tenant"
+    requests_per_minute: 600
+    budget_usd: 100.0
+
+metrics:
+  enabled: true
+  path: "/metrics"
