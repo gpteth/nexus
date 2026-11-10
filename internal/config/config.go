@@ -91,6 +91,7 @@ type UpstreamConfig struct {
 	Type            string   `yaml:"type"`
 	BaseURL         string   `yaml:"base_url"`
 	APIKey          string   `yaml:"api_key"`
+	APIKeyEncrypted string   `yaml:"api_key_encrypted"` // AES-256-GCM 密文，启动时用主密钥解密
 	Weight          int      `yaml:"weight"`
 	Models          []string `yaml:"models"`
 	HealthCheckPath string   `yaml:"health_check_path"`

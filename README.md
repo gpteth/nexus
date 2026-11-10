@@ -145,7 +145,7 @@ nexus/
 - **阶段一（已完成）**：工程骨架 + 统一 LLM 网关核心（路由、负载均衡、熔断、重试、限流、鉴权、计量、指标、Docker、端到端冒烟）。
 - **阶段二（已完成）**：Agent 运行时 —— domain 模型、单一写入者引擎、Router/Worker 双层、事件总线、Effects/Outbox、工具插件协议（覆盖率 85.1%，`-race` 零竞态）。
 - **阶段三（已完成）**：算力调度 —— 算力池、优先级调度、filter/score 放置、配额、抢占、弹性伸缩（覆盖率 87.1%，`-race` 零竞态）。
-- **阶段四**：生产化加固 —— SQLite/Postgres 持久化、密钥加密、JWT/RBAC、管理控制台、OpenTelemetry 全链路追踪、高可用与压测。
+- **阶段四（进行中）**：生产化加固 —— 已完成安全加固（AES-256-GCM 密钥加密、JWT、RBAC，覆盖率 89.2%，`-race` 零竞态）；待办 SQLite/Postgres 持久化、管理控制台、OpenTelemetry 全链路追踪、高可用与压测。
 
 详见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 

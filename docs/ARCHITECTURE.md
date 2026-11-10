@@ -174,6 +174,7 @@ nexus/
 ├── internal/
 │   ├── agent/            # Agent 运行时：domain/引擎/Router/Worker/事件总线/Effects/工具
 │   ├── compute/          # 算力调度：节点池/调度器/配额/抢占/弹性伸缩
+│   ├── security/         # 安全加固：AES-GCM 加密/JWT/RBAC/管理面中间件
 │   ├── config/           # 配置模型、加载与校验
 │   ├── logging/          # slog 日志初始化
 │   ├── server/           # HTTP server、中间件、优雅关停
@@ -195,7 +196,7 @@ nexus/
 - **阶段一（已完成）**：可编译运行的工程骨架 + 统一 LLM 网关核心链路——OpenAI 兼容 Chat/SSE 转发、多上游负载均衡、健康检查、重试、熔断、限流、API Key 鉴权、租户计量、Prometheus 指标、健康检查、优雅关停、Docker 化。
 - **阶段二（已完成）**：Agent 运行时——domain 模型、单一写入者引擎、Router/Worker 双层、事件总线、Effects/Outbox、工具插件协议。
 - **阶段三（已完成）**：算力调度——算力池、调度器、配额、抢占、弹性伸缩。
-- **阶段四**：生产化加固——Postgres/SQLite 持久化、密钥加密、JWT/RBAC、管理控制台、OTel 全链路追踪、高可用部署与压测。
+- **阶段四（进行中）**：生产化加固——已完成安全加固（密钥加密、JWT、RBAC）；待办 Postgres/SQLite 持久化、管理控制台、OTel 全链路追踪、高可用部署与压测。
 
 ### 阶段二实现说明（`internal/agent`）
 
@@ -226,3 +227,16 @@ nexus/
 - **弹性伸缩（autoscale.go）**：`Scaler` 为端口（对接云厂商/编排 API，测试用 mock）；`AutoScaler.Reconcile` 在排队深度超阈值且未达节点上限时按步扩容，在节点零占用且空闲超过 TTL（防抖动）时缩容，并以节点年龄记录避免新节点被误缩。
 
 务实取舍：SLA 驱动的高级放置（跨区反亲和、GPU 拓扑/NUMA 感知）、基于预测的提前扩缩、配额与网关限流的实时联动留待阶段四，当前以确定性的 filter/score + 配额 + 抢占 + 阈值伸缩覆盖主闭环。
+
+### 阶段四实现说明（一）：安全加固（`internal/security`）
+
+扁平包，端到端测试覆盖率 89.2%，`-race` 零竞态，全部基于标准库、零新依赖：
+
+- **密钥加密（crypto.go）**：AES-256-GCM 认证加密，随机 nonce 使相同明文产生不同密文，GCM 内置完整性校验，篡改或错误主密钥即解密失败；`LoadMasterKey` 支持 base64 原始密钥或口令经 SHA-256 派生，主密钥仅经环境变量 `NEXUS_MASTER_KEY` 注入、不进配置。
+- **JWT（jwt.go）**：HS256（HMAC-SHA256）签发与校验，签名以常量时间比较，校验过期时间；声明含主体、租户、角色。
+- **RBAC（rbac.go）**：内置 admin（全部）、operator（运维读写、不管密钥/租户）、viewer（只读）三角色，权限按"资源:动作"命名，支持自定义角色与追加授权；多角色取并集。
+- **管理面中间件（middleware.go）**：`Middleware` 校验 Bearer JWT 并注入 Claims，`RequirePermission` 做角色授权，未认证返回 401、已认证无权限返回 403。
+
+**应用接入闭环**：上游配置新增 `api_key_encrypted`，启动时用主密钥解密后注入，实现上游凭据不明文落盘；`nexus -encrypt "<明文>"` 可生成密文。已验证：正确主密钥正常启动并解密、错误主密钥启动失败（`invalid ciphertext`）。
+
+待办：持久化适配器、管理控制台、OpenTelemetry 追踪、高可用与压测。
