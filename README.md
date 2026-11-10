@@ -1,5 +1,11 @@
 # Nexus — 统一 LLM 与算力服务平台
 
+**商业化官网**：https://nexus-plum-eta.vercel.app
+
+![License](https://img.shields.io/badge/license-MIT-2dd4bf)
+![Deployed on Vercel](https://img.shields.io/badge/deployed%20on-Vercel-111?logo=vercel)
+![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go)
+
 > 企业级、高性能、可水平扩展的统一 LLM 网关 + 自主 Agent 运行时。
 > 以 Go 重写并升级自 [`deepseek-ai/dsh-superagent-prototype`](https://github.com/deepseek-ai/dsh-superagent-prototype)（TypeScript 研究原型）。
 
@@ -83,6 +89,21 @@ bash scripts/smoke.sh  # 端到端冒烟：启动 mock 上游，实际转发非�
 | GET | `/healthz` | 存活探针 |
 | GET | `/readyz` | 就绪探针（至少一个上游健康） |
 | GET | `/metrics` | Prometheus 指标 |
+
+## 官网与 Vercel 部署
+
+商业化营销官网（产品介绍、定价、FAQ、等待名单）以纯静态站点托管在 Vercel，源码位于 [`web/`](web)；有状态的网关后端仍以 Docker/服务器部署。
+
+- 官网地址：https://nexus-plum-eta.vercel.app
+- 一键部署：
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/gpteth/nexus&project-name=nexus&repository-name=nexus)
+
+本地预览：
+
+```bash
+cd web && python3 -m http.server 8000
+```
 
 ## Docker 部署
 
