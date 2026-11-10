@@ -173,6 +173,7 @@ nexus/
 ├── cmd/nexus/            # 程序入口 main
 ├── internal/
 │   ├── agent/            # Agent 运行时：domain/引擎/Router/Worker/事件总线/Effects/工具
+│   ├── compute/          # 算力调度：节点池/调度器/配额/抢占/弹性伸缩
 │   ├── config/           # 配置模型、加载与校验
 │   ├── logging/          # slog 日志初始化
 │   ├── server/           # HTTP server、中间件、优雅关停
@@ -193,7 +194,7 @@ nexus/
 
 - **阶段一（已完成）**：可编译运行的工程骨架 + 统一 LLM 网关核心链路——OpenAI 兼容 Chat/SSE 转发、多上游负载均衡、健康检查、重试、熔断、限流、API Key 鉴权、租户计量、Prometheus 指标、健康检查、优雅关停、Docker 化。
 - **阶段二（已完成）**：Agent 运行时——domain 模型、单一写入者引擎、Router/Worker 双层、事件总线、Effects/Outbox、工具插件协议。
-- **阶段三**：算力调度——算力池、调度器、配额、弹性伸缩。
+- **阶段三（已完成）**：算力调度——算力池、调度器、配额、抢占、弹性伸缩。
 - **阶段四**：生产化加固——Postgres/SQLite 持久化、密钥加密、JWT/RBAC、管理控制台、OTel 全链路追踪、高可用部署与压测。
 
 ### 阶段二实现说明（`internal/agent`）
@@ -209,3 +210,19 @@ nexus/
 - **插件协议（ports.go）**：`Tool`、`LLM`、`Repository`、`EventBus`、`EffectQueue` 均为端口接口；内置 echo/now 工具与脚本化 mock LLM 用于测试，真实环境可注入网关 HTTP 客户端与 SQLite/Postgres 适配器。
 
 相对原型的务实取舍：原型的 admission 表、followupOwners、Policy 版本化影响、follows 等研究性边界规则未逐一复刻，先保证主闭环可运行；这些规则在阶段四生产化时按真实需要再补，且不改变已定义的端口契约。
+
+### 阶段三实现说明（`internal/compute`）
+
+扁平包，端到端测试覆盖率 87.1%，`-race` 零竞态：
+
+- **资源模型（types.go）**：`Resources`（显存/并发槽/GPU）支持加减与容量校验；`Node`（GPU/推理引擎/Serverless 三类）、`Job`（含优先级与亲和性）、`Quota`（并发/节点/ token/QPS）。
+- **算力池（pool.go）**：节点注册/注销、心跳上报占用与状态、优雅下线（draining 不再接收新任务）、`ReapUnhealthy` 把心跳超时节点标记为不健康。
+- **调度器（scheduler.go）**：
+  - 优先级队列（优先级降序、同级按入队时间），提交即触发调度；
+  - 两段式放置：filter 过滤健康、资源满足、亲和匹配且不违反节点配额的节点，score 采用 bin-packing（选剩余资源最少的节点，提高利用率、为缩容创造条件）；
+  - 配额校验：提交时校验并发上限，放置时校验 distinct 节点数（复用已占用节点放行）；
+  - 抢占：高优先级任务无资源时，在满足亲和的节点上抢占更低优先级任务，释放资源后绑定；
+  - 完成回收：任务结束释放资源并立即重新调度排队任务。
+- **弹性伸缩（autoscale.go）**：`Scaler` 为端口（对接云厂商/编排 API，测试用 mock）；`AutoScaler.Reconcile` 在排队深度超阈值且未达节点上限时按步扩容，在节点零占用且空闲超过 TTL（防抖动）时缩容，并以节点年龄记录避免新节点被误缩。
+
+务实取舍：SLA 驱动的高级放置（跨区反亲和、GPU 拓扑/NUMA 感知）、基于预测的提前扩缩、配额与网关限流的实时联动留待阶段四，当前以确定性的 filter/score + 配额 + 抢占 + 阈值伸缩覆盖主闭环。
