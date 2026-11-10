@@ -10,6 +10,7 @@ import (
 	"nexus/internal/config"
 	"nexus/internal/gateway"
 	"nexus/internal/metrics"
+	"nexus/internal/trace"
 )
 
 // Server 封装 http.Server 与平台配置。
@@ -36,6 +37,11 @@ func New(cfg *config.Config, gh *gateway.Handler, reg *metrics.Registry, logger 
 			IdleTimeout:  cfg.Server.IdleTimeout.Duration,
 		},
 	}
+}
+
+// EnableTracing 在最外层接入服务端追踪中间件，为每个请求建立根 span。
+func (s *Server) EnableTracing(tr *trace.Tracer) {
+	s.http.Handler = tr.HTTPMiddleware(s.http.Handler)
 }
 
 func registerRoutes(mux *http.ServeMux, cfg *config.Config, gh *gateway.Handler, reg *metrics.Registry) {

@@ -175,6 +175,7 @@ nexus/
 │   ├── agent/            # Agent 运行时：domain/引擎/Router/Worker/事件总线/Effects/工具
 │   ├── compute/          # 算力调度：节点池/调度器/配额/抢占/弹性伸缩
 │   ├── security/         # 安全加固：AES-GCM 加密/JWT/RBAC/管理面中间件
+│   ├── trace/            # 分布式追踪：内核/W3C 传播/导出器/HTTP 埋点
 │   ├── config/           # 配置模型、加载与校验
 │   ├── logging/          # slog 日志初始化
 │   ├── server/           # HTTP server、中间件、优雅关停
@@ -196,7 +197,7 @@ nexus/
 - **阶段一（已完成）**：可编译运行的工程骨架 + 统一 LLM 网关核心链路——OpenAI 兼容 Chat/SSE 转发、多上游负载均衡、健康检查、重试、熔断、限流、API Key 鉴权、租户计量、Prometheus 指标、健康检查、优雅关停、Docker 化。
 - **阶段二（已完成）**：Agent 运行时——domain 模型、单一写入者引擎、Router/Worker 双层、事件总线、Effects/Outbox、工具插件协议。
 - **阶段三（已完成）**：算力调度——算力池、调度器、配额、抢占、弹性伸缩。
-- **阶段四（进行中）**：生产化加固——已完成安全加固（密钥加密、JWT、RBAC）与 SQLite 持久化；待办管理控制台、OTel 全链路追踪、高可用部署与压测。
+- **阶段四（进行中）**：生产化加固——已完成安全加固（密钥加密、JWT、RBAC）、SQLite 持久化与分布式追踪；待办管理控制台、高可用部署与压测。
 
 ### 阶段二实现说明（`internal/agent`）
 
@@ -248,4 +249,15 @@ nexus/
 
 已验证：真实二进制通过配置建库迁移、实际 chat 请求产生计量落盘，关闭后重新打开同一文件，租户、密钥、计量完整保留，且数据库中的密钥可正常鉴权；单元测试覆盖关闭重开（`PersistsAcrossReopen`）。store 包测试覆盖率 86.6%、`-race` 零竞态。
 
-待办：管理控制台、OpenTelemetry 追踪、高可用与压测。
+### 阶段四实现说明（三）：分布式追踪（`internal/trace`）
+
+零第三方依赖，与自实现 metrics 的风格一致：
+
+- **内核**：`TraceID`（16 字节）/`SpanID`（8 字节）随机生成；`Tracer.Start` 经 context 自动挂接父子跨度，`Span` 支持属性、状态码与结束导出，跨度树在同一 TraceID 下串联。
+- **W3C Trace Context**：`traceparent` header（`00-<traceid>-<spanid>-<flags>`）的注入与提取，严格校验版本、长度与非全零标识；这是与标准追踪系统互操作的基础。
+- **可插拔导出器（SpanExporter 端口）**：内置 JSON Lines 的 stdout/文件导出与内存导出（测试用）；后续可实现 OTLP/HTTP 对接 Jaeger/Tempo/Collector，不改变内核契约。
+- **HTTP 埋点**：服务端中间件提取远程父跨度或新建根 server span；客户端 `WrapTransport` 为每个上游调用建立 client span 并注入 traceparent，透传 SSE Flusher。
+
+**应用接入**：配置 `tracing.enabled`/`tracing.output`，`EnableTracing` 同时接入网关上游传输与服务端，关停时 flush。已验证真实请求链路：server 根 span 与上游 client span 同 trace、client 的 parent 指向 server span；trace 包覆盖率 84.7%、`-race` 零竞态。
+
+待办：管理控制台、高可用与压测。

@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -18,6 +19,7 @@ import (
 	"nexus/internal/security"
 	"nexus/internal/server"
 	"nexus/internal/store"
+	"nexus/internal/trace"
 
 	_ "modernc.org/sqlite"
 )
@@ -61,6 +63,16 @@ func main() {
 	gh := gateway.NewHandler(gw, logger)
 	srv := server.New(cfg, gh, reg, logger)
 
+	tracer, traceCloser, err := buildTracer(cfg)
+	if err != nil {
+		logger.Error("failed to initialize tracer", "error", err)
+		os.Exit(1)
+	}
+	if tracer != nil {
+		gw.EnableTracing(tracer)
+		srv.EnableTracing(tracer)
+	}
+
 	// 后台任务随信号上下文一起停止。
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -84,6 +96,12 @@ func main() {
 	if err := srv.Shutdown(); err != nil {
 		logger.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)
+	}
+	if tracer != nil {
+		_ = tracer.Shutdown(context.Background())
+	}
+	if traceCloser != nil {
+		_ = traceCloser.Close()
 	}
 	logger.Info("shutdown complete")
 }
@@ -168,4 +186,23 @@ func buildStore(cfg *config.Config) (store.Store, error) {
 		return nil, err
 	}
 	return sqlStore, nil
+}
+
+// buildTracer 按配置构建追踪器；未启用时返回 nil。输出可指向 stdout 或文件。
+func buildTracer(cfg *config.Config) (*trace.Tracer, io.Closer, error) {
+	if !cfg.Tracing.Enabled {
+		return nil, nil, nil
+	}
+	var (
+		w      io.Writer = os.Stdout
+		closer io.Closer
+	)
+	if cfg.Tracing.Output != "" && cfg.Tracing.Output != "stdout" {
+		f, err := os.OpenFile(cfg.Tracing.Output, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+		if err != nil {
+			return nil, nil, err
+		}
+		w, closer = f, f
+	}
+	return trace.NewTracer(trace.NewStdoutExporter(w), time.Now), closer, nil
 }

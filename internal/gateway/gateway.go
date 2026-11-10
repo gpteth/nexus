@@ -9,6 +9,7 @@ import (
 	"nexus/internal/config"
 	"nexus/internal/metrics"
 	"nexus/internal/store"
+	"nexus/internal/trace"
 )
 
 // GatewayMetrics 聚合网关相关指标。
@@ -48,6 +49,11 @@ func New(cfg *config.Config, logger *slog.Logger, st store.Store, reg *metrics.R
 	g.buildUpstreams(reg)
 	g.metrics = registerMetrics(reg)
 	return g
+}
+
+// EnableTracing 用追踪器包装上游 HTTP 传输，使每个上游调用产生 client span。
+func (g *Gateway) EnableTracing(tr *trace.Tracer) {
+	g.client.Transport = tr.WrapTransport(g.client.Transport)
 }
 
 func newTransport() *http.Transport {

@@ -19,6 +19,11 @@ database:
   driver: "sqlite"           # 当前支持 sqlite
   dsn: "data/nexus.db"
 
+# 分布式追踪：W3C traceparent 传播，输出 JSON Lines；可对接日志采集。
+tracing:
+  enabled: true
+  output: "stdout"           # stdout 或文件路径
+
 gateway:
   default_timeout: "120s"
 

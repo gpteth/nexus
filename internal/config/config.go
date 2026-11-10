@@ -34,10 +34,17 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Log      LogConfig      `yaml:"log"`
 	Database DatabaseConfig `yaml:"database"`
+	Tracing  TracingConfig  `yaml:"tracing"`
 	Gateway  GatewayConfig  `yaml:"gateway"`
 	Auth     AuthConfig     `yaml:"auth"`
 	Tenants  []TenantConfig `yaml:"tenants"`
 	Metrics  MetricsConfig  `yaml:"metrics"`
+}
+
+// TracingConfig 是分布式追踪配置。
+type TracingConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Output  string `yaml:"output"` // stdout 或文件路径，默认 stdout
 }
 
 // DatabaseConfig 是持久化配置；Driver 为空时使用内存存储。
