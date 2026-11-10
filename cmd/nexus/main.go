@@ -61,7 +61,9 @@ func main() {
 	}
 	gw := gateway.New(cfg, logger, st, reg)
 	gh := gateway.NewHandler(gw, logger)
-	srv := server.New(cfg, gh, reg, logger)
+	adminH, adminCleanup := buildAdmin(cfg, logger, st)
+	defer adminCleanup()
+	srv := server.New(cfg, gh, reg, adminH, logger)
 
 	tracer, traceCloser, err := buildTracer(cfg)
 	if err != nil {

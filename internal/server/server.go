@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"nexus/internal/admin"
 	"nexus/internal/config"
 	"nexus/internal/gateway"
 	"nexus/internal/metrics"
@@ -20,10 +21,10 @@ type Server struct {
 	log  *slog.Logger
 }
 
-// New 创建服务器并注册全部路由与中间件。
-func New(cfg *config.Config, gh *gateway.Handler, reg *metrics.Registry, logger *slog.Logger) *Server {
+// New 创建服务器并注册全部路由与中间件。adminH 为 nil 时不启用管理控制台。
+func New(cfg *config.Config, gh *gateway.Handler, reg *metrics.Registry, adminH *admin.Handler, logger *slog.Logger) *Server {
 	mux := http.NewServeMux()
-	registerRoutes(mux, cfg, gh, reg)
+	registerRoutes(mux, cfg, gh, reg, adminH)
 
 	handler := chain(mux, logger, cfg.Server.CORSAllowOrigins)
 	return &Server{
@@ -44,7 +45,7 @@ func (s *Server) EnableTracing(tr *trace.Tracer) {
 	s.http.Handler = tr.HTTPMiddleware(s.http.Handler)
 }
 
-func registerRoutes(mux *http.ServeMux, cfg *config.Config, gh *gateway.Handler, reg *metrics.Registry) {
+func registerRoutes(mux *http.ServeMux, cfg *config.Config, gh *gateway.Handler, reg *metrics.Registry, adminH *admin.Handler) {
 	mux.HandleFunc("POST /v1/chat/completions", gh.Chat)
 	mux.HandleFunc("GET /v1/models", gh.Models)
 	mux.HandleFunc("GET /healthz", gh.Liveness)
@@ -55,6 +56,9 @@ func registerRoutes(mux *http.ServeMux, cfg *config.Config, gh *gateway.Handler,
 			w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 			_, _ = reg.WriteTo(w)
 		})
+	}
+	if adminH != nil {
+		adminH.Route(mux)
 	}
 }
 

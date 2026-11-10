@@ -98,3 +98,27 @@ func (m *MemoryStore) Usage(tenantID string, since time.Time) []UsageRecord {
 	}
 	return out
 }
+
+// ListTenants 返回全部租户快照。
+func (m *MemoryStore) ListTenants() []Tenant {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]Tenant, 0, len(m.tenants))
+	for _, t := range m.tenants {
+		out = append(out, *t)
+	}
+	return out
+}
+
+// ListAPIKeys 返回全部密钥快照。
+func (m *MemoryStore) ListAPIKeys() []APIKey {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]APIKey, 0, len(m.keys))
+	for _, k := range m.keys {
+		cp := *k
+		cp.Models = append([]string(nil), k.Models...)
+		out = append(out, cp)
+	}
+	return out
+}

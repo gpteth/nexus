@@ -24,6 +24,19 @@ tracing:
   enabled: true
   output: "stdout"           # stdout 或文件路径
 
+# 管理控制台：内嵌 Web UI 与管理面 API，访问 /console/。
+# 密钥与密码请用环境变量注入，勿提交真实凭据。
+admin:
+  enabled: true
+  jwt_secret: "${NEXUS_ADMIN_SECRET}"
+  token_ttl: "2h"
+  users:
+    - username: "admin"
+      password: "${NEXUS_ADMIN_PASSWORD}"
+      roles: ["admin"]
+  seed:
+    nodes: []                # 可选引导节点，参考 config.console.yaml
+
 gateway:
   default_timeout: "120s"
 

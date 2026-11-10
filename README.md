@@ -107,6 +107,18 @@ bin/bench -path /v1/chat/completions -method POST -key sk-nexus-smoke -c 50 -n 1
 | GET | `/readyz` | 就绪探针（至少一个上游健康） |
 | GET | `/metrics` | Prometheus 指标 |
 
+## 管理控制台
+
+单二进制内嵌 Web 控制台（`go:embed`，零构建），登录后可视化租户、密钥、工单、算力节点与调度作业。
+
+```bash
+go build -o bin/nexus ./cmd/nexus
+bin/nexus -config configs/config.console.yaml
+# 浏览器打开 http://127.0.0.1:8080/console/ ，默认凭据 admin / admin123（仅演示，生产用环境变量）
+```
+
+控制台 API 走 JWT 认证与 RBAC 授权，密钥仅返回掩码，完整凭据不下发前端。
+
 ## 官网与 Vercel 部署
 
 商业化营销官网（产品介绍、定价、FAQ、等待名单）以纯静态站点托管在 Vercel，源码位于 [`web/`](web)；有状态的网关后端仍以 Docker/服务器部署。
@@ -162,7 +174,7 @@ nexus/
 - **阶段一（已完成）**：工程骨架 + 统一 LLM 网关核心（路由、负载均衡、熔断、重试、限流、鉴权、计量、指标、Docker、端到端冒烟）。
 - **阶段二（已完成）**：Agent 运行时 —— domain 模型、单一写入者引擎、Router/Worker 双层、事件总线、Effects/Outbox、工具插件协议（覆盖率 85.1%，`-race` 零竞态）。
 - **阶段三（已完成）**：算力调度 —— 算力池、优先级调度、filter/score 放置、配额、抢占、弹性伸缩（覆盖率 87.1%，`-race` 零竞态）。
-- **阶段四（进行中）**：生产化加固 —— 已完成安全加固（AES-256-GCM、JWT、RBAC，89.2%）、SQLite 持久化（纯 Go 无 cgo，86.6%）、W3C 分布式追踪（零依赖，84.7%）与压测基线（零依赖压测器，端到端 5 万+ req/s、p99 3ms 内），均 `-race` 零竞态；待办管理控制台、高可用部署。
+- **阶段四（进行中）**：生产化加固 —— 已完成安全加固（AES-256-GCM、JWT、RBAC，89.2%）、SQLite 持久化（纯 Go 无 cgo，86.6%）、W3C 分布式追踪（84.7%）、压测基线（端到端 5 万+ req/s、p99 3ms 内）与管理控制台（内嵌 Web UI，可视化租户/密钥/工单/节点/作业），均 `-race` 零竞态；待办高可用部署。
 
 详见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 

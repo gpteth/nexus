@@ -1,0 +1,56 @@
+server:
+  listen: "127.0.0.1:8080"
+log:
+  level: "info"
+  format: "text"
+admin:
+  enabled: true
+  jwt_secret: "nexus-admin-demo-secret-change-me"  # 生产用 ${NEXUS_ADMIN_SECRET}
+  token_ttl: "2h"
+  users:
+    - username: "admin"
+      password: "admin123"  # 生产用环境变量注入，勿硬编码
+      roles: ["admin"]
+  seed:
+    nodes:
+      - id: "node-gpu-1"
+        kind: "gpu"
+        endpoint: "http://127.0.0.1:9201"
+        state: "healthy"
+        memory_mb: 65536
+        slots: 8
+        gpus: 2
+        labels: {zone: "cn-sz", gpu: "a100"}
+      - id: "node-inf-1"
+        kind: "inference"
+        endpoint: "http://127.0.0.1:9202"
+        state: "healthy"
+        memory_mb: 32768
+        slots: 4
+        gpus: 1
+        labels: {zone: "cn-sz", engine: "vllm"}
+      - id: "node-srv-1"
+        kind: "serverless"
+        endpoint: "http://127.0.0.1:9203"
+        state: "draining"
+        memory_mb: 16384
+        slots: 2
+        gpus: 0
+        labels: {zone: "cn-hk"}
+gateway:
+  upstreams:
+    - name: "mock"
+      type: "openai"
+      base_url: "http://127.0.0.1:9000/v1"
+      weight: 1
+      models: ["mock-model"]
+auth:
+  keys:
+    - key: "sk-nexus-smoke"
+      tenant: "default"
+tenants:
+  - id: "default"
+    name: "默认租户"
+metrics:
+  enabled: true
+  path: "/metrics"

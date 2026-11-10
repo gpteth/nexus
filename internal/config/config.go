@@ -35,10 +35,44 @@ type Config struct {
 	Log      LogConfig      `yaml:"log"`
 	Database DatabaseConfig `yaml:"database"`
 	Tracing  TracingConfig  `yaml:"tracing"`
+	Admin    AdminConfig    `yaml:"admin"`
 	Gateway  GatewayConfig  `yaml:"gateway"`
 	Auth     AuthConfig     `yaml:"auth"`
 	Tenants  []TenantConfig `yaml:"tenants"`
 	Metrics  MetricsConfig  `yaml:"metrics"`
+}
+
+// AdminConfig 是管理控制台与管理面 API 配置。
+type AdminConfig struct {
+	Enabled   bool        `yaml:"enabled"`
+	JWTSecret string      `yaml:"jwt_secret"` // 建议用环境变量 ${NEXUS_ADMIN_SECRET} 注入
+	TokenTTL  Duration    `yaml:"token_ttl"`
+	Users     []AdminUser `yaml:"users"`
+	Seed      AdminSeed   `yaml:"seed"`
+}
+
+// AdminUser 是管理面登录凭据；密码应经环境变量注入，不硬编码。
+type AdminUser struct {
+	Username string   `yaml:"username"`
+	Password string   `yaml:"password"`
+	Roles    []string `yaml:"roles"`
+}
+
+// AdminSeed 是控制台演示/引导数据，用于让节点与作业页开箱即有真实数据。
+type AdminSeed struct {
+	Nodes []SeedNode `yaml:"nodes"`
+}
+
+// SeedNode 描述一个引导注册的算力节点。
+type SeedNode struct {
+	ID       string            `yaml:"id"`
+	Kind     string            `yaml:"kind"`
+	Endpoint string            `yaml:"endpoint"`
+	State    string            `yaml:"state"`
+	MemoryMB int               `yaml:"memory_mb"`
+	Slots    int               `yaml:"slots"`
+	GPUs     int               `yaml:"gpus"`
+	Labels   map[string]string `yaml:"labels"`
 }
 
 // TracingConfig 是分布式追踪配置。
@@ -219,6 +253,9 @@ func (c *Config) setDefaults() {
 			c.Gateway.Upstreams[i].Weight = 1
 		}
 	}
+	if c.Admin.Enabled && c.Admin.TokenTTL.Duration == 0 {
+		c.Admin.TokenTTL.Duration = 2 * time.Hour
+	}
 }
 
 // Validate 检查配置的内部一致性。
@@ -268,6 +305,30 @@ func (c *Config) Validate() error {
 		}
 		if k.Tenant != "" && len(tenants) > 0 && !tenants[k.Tenant] {
 			return fmt.Errorf("auth.keys[%d]: unknown tenant %q", i, k.Tenant)
+		}
+	}
+	if c.Admin.Enabled {
+		if c.Admin.JWTSecret == "" {
+			return fmt.Errorf("admin: jwt_secret is required (use ${NEXUS_ADMIN_SECRET})")
+		}
+		if len(c.Admin.Users) == 0 {
+			return fmt.Errorf("admin: at least one user is required")
+		}
+		users := map[string]bool{}
+		for i, u := range c.Admin.Users {
+			if u.Username == "" {
+				return fmt.Errorf("admin.users[%d]: username is required", i)
+			}
+			if users[u.Username] {
+				return fmt.Errorf("admin.users: duplicate username %q", u.Username)
+			}
+			users[u.Username] = true
+			if u.Password == "" {
+				return fmt.Errorf("admin.users[%s]: password is required (use env var)", u.Username)
+			}
+			if len(u.Roles) == 0 {
+				return fmt.Errorf("admin.users[%s]: roles are required", u.Username)
+			}
 		}
 	}
 	return nil

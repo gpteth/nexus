@@ -186,6 +186,49 @@ func (s *SQLStore) Usage(tenantID string, since time.Time) []UsageRecord {
 	return out
 }
 
+// ListTenants 返回全部租户。
+func (s *SQLStore) ListTenants() []Tenant {
+	rows, err := s.db.Query(`SELECT id, name, requests_per_minute, budget_usd FROM tenants ORDER BY id`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	out := make([]Tenant, 0)
+	for rows.Next() {
+		var t Tenant
+		if err := rows.Scan(&t.ID, &t.Name, &t.RequestsPerMinute, &t.BudgetUSD); err != nil {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
+// ListAPIKeys 返回全部密钥。
+func (s *SQLStore) ListAPIKeys() []APIKey {
+	rows, err := s.db.Query(
+		`SELECT id, key, tenant_id, enabled, requests_per_minute, models FROM api_keys ORDER BY id`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	out := make([]APIKey, 0)
+	for rows.Next() {
+		var (
+			k       APIKey
+			enabled int
+			models  string
+		)
+		if err := rows.Scan(&k.ID, &k.Key, &k.TenantID, &enabled, &k.RequestsPerMinute, &models); err != nil {
+			continue
+		}
+		k.Enabled = enabled == 1
+		k.Models = splitModels(models)
+		out = append(out, k)
+	}
+	return out
+}
+
 // Close 关闭底层连接。
 func (s *SQLStore) Close() error { return s.db.Close() }
 

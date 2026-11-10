@@ -177,6 +177,7 @@ nexus/
 │   ├── compute/          # 算力调度：节点池/调度器/配额/抢占/弹性伸缩
 │   ├── security/         # 安全加固：AES-GCM 加密/JWT/RBAC/管理面中间件
 │   ├── trace/            # 分布式追踪：内核/W3C 传播/导出器/HTTP 埋点
+│   ├── admin/            # 管理控制台：API/鉴权/嵌入静态 UI
 │   ├── config/           # 配置模型、加载与校验
 │   ├── logging/          # slog 日志初始化
 │   ├── server/           # HTTP server、中间件、优雅关停
@@ -198,7 +199,7 @@ nexus/
 - **阶段一（已完成）**：可编译运行的工程骨架 + 统一 LLM 网关核心链路——OpenAI 兼容 Chat/SSE 转发、多上游负载均衡、健康检查、重试、熔断、限流、API Key 鉴权、租户计量、Prometheus 指标、健康检查、优雅关停、Docker 化。
 - **阶段二（已完成）**：Agent 运行时——domain 模型、单一写入者引擎、Router/Worker 双层、事件总线、Effects/Outbox、工具插件协议。
 - **阶段三（已完成）**：算力调度——算力池、调度器、配额、抢占、弹性伸缩。
-- **阶段四（进行中）**：生产化加固——已完成安全加固（密钥加密、JWT、RBAC）、SQLite 持久化、分布式追踪与压测基线；待办管理控制台、高可用部署。
+- **阶段四（进行中）**：生产化加固——已完成安全加固（密钥加密、JWT、RBAC）、SQLite 持久化、分布式追踪、压测基线与管理控制台；待办高可用部署。
 
 ### 阶段二实现说明（`internal/agent`）
 
@@ -277,4 +278,15 @@ nexus/
 
 复现方式：`go build ./cmd/bench`，先 `bin/bench -mock-server` 起上游，再用指向该上游的配置启动 nexus，最后 `bin/bench -path /v1/chat/completions -method POST -key <key> -body '<json>' -c 50 -n 10000`。
 
-待办：管理控制台、高可用部署。
+### 阶段四实现说明（五）：管理控制台（`internal/admin`）
+
+把此前各阶段的能力汇聚为可运维的可视化界面，单二进制内嵌静态资源（`go:embed`），零构建、零新增依赖。
+
+- **管理面 API**：`POST /api/admin/login` 用账号密码换 JWT；其余端点（overview/tenants/keys/tickets/nodes/jobs）经 `JWTManager.Middleware` 认证、`RBAC.RequirePermission` 按"资源:动作"授权，未登录返回 401、越权返回 403。
+- **运行时接入**：主程序现真实装配算力池、调度器与 Agent 运行时；节点经配置引导注册，工单经确定性脚本模型（不依赖真实 LLM）产生 accept/blocked 全流程，控制台读取的是组件真实状态而非静态假数据。
+- **安全细节**：密钥只返回掩码（前 7 位 + 星号 + 后 4 位），完整凭据不下发前端；登录密码用常量时间比较，避免计时侧信道。
+- **前端**：深色墨蓝 + 翡翠绿/青风格，原生 JS 单页，登录后侧边栏切换六个视图，概览每 5 秒自动刷新，节点含资源使用率条。
+
+已端到端验证：错误密码与无 token 均被拦截，登录后六类数据正确渲染。
+
+待办：高可用部署。

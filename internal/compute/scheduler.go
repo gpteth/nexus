@@ -244,6 +244,17 @@ func (s *Scheduler) Queued() int {
 	return len(s.queue)
 }
 
+// Jobs 返回全部任务快照（含排队/运行/终态），供管理控制台读取。
+func (s *Scheduler) Jobs() []*Job {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]*Job, 0, len(s.jobs))
+	for _, j := range s.jobs {
+		out = append(out, j)
+	}
+	return out
+}
+
 func affinityMatch(required, labels map[string]string) bool {
 	for k, v := range required {
 		if labels[k] != v {

@@ -42,4 +42,9 @@ type Store interface {
 	Tenant(id string) (*Tenant, bool)
 	AddUsage(rec UsageRecord)
 	Usage(tenantID string, since time.Time) []UsageRecord
+
+	// ListTenants 返回全部租户，供管理控制台读取。
+	ListTenants() []Tenant
+	// ListAPIKeys 返回全部密钥（含原始值，调用方负责掩码，不直接下发前端）。
+	ListAPIKeys() []APIKey
 }
