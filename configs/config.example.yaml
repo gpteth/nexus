@@ -13,6 +13,12 @@ log:
   level: "info"              # debug | info | warn | error
   format: "json"             # json | text
 
+# 持久化配置：留空 driver 则使用内存存储（重启不保留）。
+# SQLite 为纯 Go 驱动、无 cgo；文件路径所在目录需可写。
+database:
+  driver: "sqlite"           # 当前支持 sqlite
+  dsn: "data/nexus.db"
+
 gateway:
   default_timeout: "120s"
 

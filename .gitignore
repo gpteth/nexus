@@ -2,3 +2,7 @@ bin/
 *.out
 .DS_Store
 configs/config.yaml
+*.db
+*.db-shm
+*.db-wal
+data/

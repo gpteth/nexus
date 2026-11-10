@@ -18,6 +18,8 @@ import (
 	"nexus/internal/security"
 	"nexus/internal/server"
 	"nexus/internal/store"
+
+	_ "modernc.org/sqlite"
 )
 
 // masterKeyEnv 是注入主密钥的环境变量，用于解密配置中的上游凭据。
@@ -50,7 +52,11 @@ func main() {
 	}
 
 	reg := metrics.NewRegistry()
-	st := store.BuildFromConfig(cfg)
+	st, err := buildStore(cfg)
+	if err != nil {
+		logger.Error("failed to initialize storage", "error", err)
+		os.Exit(1)
+	}
 	gw := gateway.New(cfg, logger, st, reg)
 	gh := gateway.NewHandler(gw, logger)
 	srv := server.New(cfg, gh, reg, logger)
@@ -146,4 +152,20 @@ func runEncrypt(plain string) error {
 	}
 	fmt.Println(enc)
 	return nil
+}
+
+// buildStore 按配置选择存储：配置 driver 时用 SQL 持久化并 Seed，否则用内存。
+func buildStore(cfg *config.Config) (store.Store, error) {
+	if cfg.Database.Driver == "" {
+		return store.BuildFromConfig(cfg), nil
+	}
+	sqlStore, err := store.NewSQLStore(cfg.Database.Driver, cfg.Database.DataSource)
+	if err != nil {
+		return nil, err
+	}
+	if err := sqlStore.Seed(cfg); err != nil {
+		sqlStore.Close()
+		return nil, err
+	}
+	return sqlStore, nil
 }

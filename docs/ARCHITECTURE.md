@@ -182,7 +182,7 @@ nexus/
 │   ├── sse/              # SSE 流式读写工具
 │   ├── auth/             # API Key 鉴权
 │   ├── tenant/           # 租户与配额
-│   ├── store/            # 存储端口与内存实现
+│   ├── store/            # 存储端口、内存实现与 database/sql 持久化（SQLite）
 │   ├── metrics/          # Prometheus 指标
 │   ├── id/               # ID 生成
 │   └── backoff/          # 指数退避
@@ -196,7 +196,7 @@ nexus/
 - **阶段一（已完成）**：可编译运行的工程骨架 + 统一 LLM 网关核心链路——OpenAI 兼容 Chat/SSE 转发、多上游负载均衡、健康检查、重试、熔断、限流、API Key 鉴权、租户计量、Prometheus 指标、健康检查、优雅关停、Docker 化。
 - **阶段二（已完成）**：Agent 运行时——domain 模型、单一写入者引擎、Router/Worker 双层、事件总线、Effects/Outbox、工具插件协议。
 - **阶段三（已完成）**：算力调度——算力池、调度器、配额、抢占、弹性伸缩。
-- **阶段四（进行中）**：生产化加固——已完成安全加固（密钥加密、JWT、RBAC）；待办 Postgres/SQLite 持久化、管理控制台、OTel 全链路追踪、高可用部署与压测。
+- **阶段四（进行中）**：生产化加固——已完成安全加固（密钥加密、JWT、RBAC）与 SQLite 持久化；待办管理控制台、OTel 全链路追踪、高可用部署与压测。
 
 ### 阶段二实现说明（`internal/agent`）
 
@@ -239,4 +239,13 @@ nexus/
 
 **应用接入闭环**：上游配置新增 `api_key_encrypted`，启动时用主密钥解密后注入，实现上游凭据不明文落盘；`nexus -encrypt "<明文>"` 可生成密文。已验证：正确主密钥正常启动并解密、错误主密钥启动失败（`invalid ciphertext`）。
 
-待办：持久化适配器、管理控制台、OpenTelemetry 追踪、高可用与压测。
+### 阶段四实现说明（二）：SQLite 持久化（`internal/store`）
+
+- **驱动选择**：`modernc.org/sqlite`，纯 Go、无 cgo，保持单二进制静态部署；驱动经入口 blank import 注册，核心 `SQLStore` 只依赖标准库 `database/sql`，驱动无关，未来可平滑接入 Postgres。
+- **Schema（自动迁移）**：`tenants`、`api_keys`（密钥唯一索引）、`usage_records`（自增主键 + 租户/时间复合索引），全部 `CREATE TABLE IF NOT EXISTS`，启动即幂等建表。
+- **SQLStore**：实现 `store.Store` 接口，与 `MemoryStore` 可互换；`Seed` 用 `INSERT OR IGNORE` 从配置引导租户与密钥，`AddUsage` 落库，`Usage` 支持租户与时间窗查询。SQLite 单写入者，连接池限制为 1 以避免 `SQLITE_BUSY`。
+- **配置接入**：新增 `database.driver`/`database.dsn`，配置 driver 时走持久化、否则回退内存；`*.db` 与 `data/` 已加入 `.gitignore`。
+
+已验证：真实二进制通过配置建库迁移、实际 chat 请求产生计量落盘，关闭后重新打开同一文件，租户、密钥、计量完整保留，且数据库中的密钥可正常鉴权；单元测试覆盖关闭重开（`PersistsAcrossReopen`）。store 包测试覆盖率 86.6%、`-race` 零竞态。
+
+待办：管理控制台、OpenTelemetry 追踪、高可用与压测。

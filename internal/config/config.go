@@ -31,12 +31,19 @@ func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
 
 // Config 是平台根配置。
 type Config struct {
-	Server  ServerConfig   `yaml:"server"`
-	Log     LogConfig      `yaml:"log"`
-	Gateway GatewayConfig  `yaml:"gateway"`
-	Auth    AuthConfig     `yaml:"auth"`
-	Tenants []TenantConfig `yaml:"tenants"`
-	Metrics MetricsConfig  `yaml:"metrics"`
+	Server   ServerConfig   `yaml:"server"`
+	Log      LogConfig      `yaml:"log"`
+	Database DatabaseConfig `yaml:"database"`
+	Gateway  GatewayConfig  `yaml:"gateway"`
+	Auth     AuthConfig     `yaml:"auth"`
+	Tenants  []TenantConfig `yaml:"tenants"`
+	Metrics  MetricsConfig  `yaml:"metrics"`
+}
+
+// DatabaseConfig 是持久化配置；Driver 为空时使用内存存储。
+type DatabaseConfig struct {
+	Driver     string `yaml:"driver"` // 当前支持 sqlite
+	DataSource string `yaml:"dsn"`    // SQLite 文件路径，如 data/nexus.db
 }
 
 // ServerConfig 是 HTTP 服务配置。
