@@ -180,4 +180,8 @@ nexus/
 
 ## 许可与致谢
 
+本项目基于 [Apache License 2.0](LICENSE) 开源，可自由使用、修改与分发，含专利授权条款。
+
+Copyright 2026 Nexus Authors.
+
 设计思想源于 DeepSeek 团队开源的 dsh-superagent 项目（MIT）。本项目为独立的工程重写与扩展，不隶属于 DeepSeek。
