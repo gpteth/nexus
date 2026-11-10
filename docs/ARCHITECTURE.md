@@ -172,6 +172,7 @@ flowchart LR
 nexus/
 ├── cmd/nexus/            # 程序入口 main
 ├── internal/
+│   ├── agent/            # Agent 运行时：domain/引擎/Router/Worker/事件总线/Effects/工具
 │   ├── config/           # 配置模型、加载与校验
 │   ├── logging/          # slog 日志初始化
 │   ├── server/           # HTTP server、中间件、优雅关停
@@ -190,7 +191,21 @@ nexus/
 
 ## 7. 演进路线
 
-- **阶段一（当前）**：可编译运行的工程骨架 + 统一 LLM 网关核心链路——OpenAI 兼容 Chat/SSE 转发、多上游负载均衡、健康检查、重试、熔断、限流、API Key 鉴权、租户计量、Prometheus 指标、健康检查、优雅关停、Docker 化。
-- **阶段二**：Agent 运行时——domain 模型、引擎、Router/Worker、事件总线、Effects/Outbox、插件协议。
+- **阶段一（已完成）**：可编译运行的工程骨架 + 统一 LLM 网关核心链路——OpenAI 兼容 Chat/SSE 转发、多上游负载均衡、健康检查、重试、熔断、限流、API Key 鉴权、租户计量、Prometheus 指标、健康检查、优雅关停、Docker 化。
+- **阶段二（已完成）**：Agent 运行时——domain 模型、单一写入者引擎、Router/Worker 双层、事件总线、Effects/Outbox、工具插件协议。
 - **阶段三**：算力调度——算力池、调度器、配额、弹性伸缩。
 - **阶段四**：生产化加固——Postgres/SQLite 持久化、密钥加密、JWT/RBAC、管理控制台、OTel 全链路追踪、高可用部署与压测。
+
+### 阶段二实现说明（`internal/agent`）
+
+落地为一个扁平包，核心闭环已通过端到端测试（覆盖率 85.1%，`-race` 零竞态）：
+
+- **领域模型（types.go）**：`Trigger`（不可变事件）、`Thread`（线程聚合）、`Ticket`（工单聚合）、`Mandate`（不可变授权）、`Decision`、`Assignment`，对应原型的 Source/Trigger/Thread/Ticket/Mandate/Assignment。
+- **单一写入者（engine.go）**：所有改变聚合的命令经 command channel 串行进入同一 goroutine，落实"一个状态一个写入者"；提供 Receive、ApplyDecision、StartAssignment、RecordReport 等原子操作。
+- **Router（router.go，轻模型）**：订阅 `trigger.received` 事件，工作池消费；Fast Path 用确定性规则过滤非人类噪音与停止指令（零模型调用），Slow Path 调用 LLM 按 JSON 协议研判 accept/ignore/stop。
+- **Worker（worker.go，强模型）**：launch 副作用触发，隔离会话内按 JSON 协议循环 `call_tool`/`final`，工具结果回灌；达到最大步数上报 blocked，保持工单开放等待人工。
+- **事件总线（eventbus.go）**：内存发布订阅，支持按类型与通配符订阅。
+- **Effects/Outbox（effects.go）**：统一为一个内存持久队列，事务内入队、提交后执行、按 Kind+Key 幂等去重、失败指数退避（100ms 起，上限 30s），实现至少一次投递。
+- **插件协议（ports.go）**：`Tool`、`LLM`、`Repository`、`EventBus`、`EffectQueue` 均为端口接口；内置 echo/now 工具与脚本化 mock LLM 用于测试，真实环境可注入网关 HTTP 客户端与 SQLite/Postgres 适配器。
+
+相对原型的务实取舍：原型的 admission 表、followupOwners、Policy 版本化影响、follows 等研究性边界规则未逐一复刻，先保证主闭环可运行；这些规则在阶段四生产化时按真实需要再补，且不改变已定义的端口契约。
