@@ -171,6 +171,7 @@ flowchart LR
 ```
 nexus/
 ├── cmd/nexus/            # 程序入口 main
+├── cmd/bench/            # 自包含压测器与高并发 mock
 ├── internal/
 │   ├── agent/            # Agent 运行时：domain/引擎/Router/Worker/事件总线/Effects/工具
 │   ├── compute/          # 算力调度：节点池/调度器/配额/抢占/弹性伸缩
@@ -197,7 +198,7 @@ nexus/
 - **阶段一（已完成）**：可编译运行的工程骨架 + 统一 LLM 网关核心链路——OpenAI 兼容 Chat/SSE 转发、多上游负载均衡、健康检查、重试、熔断、限流、API Key 鉴权、租户计量、Prometheus 指标、健康检查、优雅关停、Docker 化。
 - **阶段二（已完成）**：Agent 运行时——domain 模型、单一写入者引擎、Router/Worker 双层、事件总线、Effects/Outbox、工具插件协议。
 - **阶段三（已完成）**：算力调度——算力池、调度器、配额、抢占、弹性伸缩。
-- **阶段四（进行中）**：生产化加固——已完成安全加固（密钥加密、JWT、RBAC）、SQLite 持久化与分布式追踪；待办管理控制台、高可用部署与压测。
+- **阶段四（进行中）**：生产化加固——已完成安全加固（密钥加密、JWT、RBAC）、SQLite 持久化、分布式追踪与压测基线；待办管理控制台、高可用部署。
 
 ### 阶段二实现说明（`internal/agent`）
 
@@ -260,4 +261,20 @@ nexus/
 
 **应用接入**：配置 `tracing.enabled`/`tracing.output`，`EnableTracing` 同时接入网关上游传输与服务端，关停时 flush。已验证真实请求链路：server 根 span 与上游 client span 同 trace、client 的 parent 指向 server span；trace 包覆盖率 84.7%、`-race` 零竞态。
 
-待办：管理控制台、高可用与压测。
+### 阶段四实现说明（四）：压测与性能基线（`cmd/bench`）
+
+零第三方依赖的自包含压测器：可配置并发、总请求数或持续时长，输出吞吐、错误率、状态码分布与延迟分位（min/mean/p50/p90/p99/p999/max）；内置 `-mock-server` 模式提供高并发 OpenAI 兼容上游，用于排除测试目标干扰。
+
+**本机 loopback、50 并发实测基线（全部零错误）：**
+
+| 场景 | 吞吐 | p50 | p90 | p99 | p999 |
+|---|---|---|---|---|---|
+| healthz（网关纯开销） | 92,807 req/s | 0.24ms | 1.16ms | 2.16ms | 3.14ms |
+| models（含鉴权） | 87,542 req/s | 0.29ms | 1.22ms | 2.38ms | 3.67ms |
+| chat 端到端（Go mock） | 50,948 req/s | 0.82ms | 1.70ms | 2.85ms | 4.84ms |
+
+关键验证：同一 chat 链路经 Python 单进程 mock 仅 1,212 req/s 且 p999 达 3.9s，替换为 Go mock 后升至 50,948 req/s 且 p999 回落到 4.8ms——证明此前的长尾与低吞吐瓶颈在测试目标（Python GIL/线程调度），Go 网关在完整鉴权+转发+计量链路下无长尾、p99 稳定在 3ms 内。
+
+复现方式：`go build ./cmd/bench`，先 `bin/bench -mock-server` 起上游，再用指向该上游的配置启动 nexus，最后 `bin/bench -path /v1/chat/completions -method POST -key <key> -body '<json>' -c 50 -n 10000`。
+
+待办：管理控制台、高可用部署。

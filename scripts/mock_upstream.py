@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """最小 OpenAI 兼容上游，用于 Nexus 端到端冒烟测试。监听 127.0.0.1:9000。"""
 import json
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -50,4 +50,4 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    HTTPServer(("127.0.0.1", 9000), Handler).serve_forever()
+    ThreadingHTTPServer(("127.0.0.1", 9000), Handler).serve_forever()

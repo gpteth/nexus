@@ -80,6 +80,23 @@ go test -race ./...    # 竞态检测
 bash scripts/smoke.sh  # 端到端冒烟：启动 mock 上游，实际转发非流式/流式请求
 ```
 
+## 性能基线
+
+本机 loopback、50 并发、零错误实测（详见 `docs/ARCHITECTURE.md`）：
+
+| 场景 | 吞吐 | p99 |
+| --- | --- | --- |
+| healthz 网关纯开销 | 92,807 req/s | 2.16ms |
+| models 含鉴权 | 87,542 req/s | 2.38ms |
+| chat 端到端（鉴权+转发+计量） | 50,948 req/s | 2.85ms |
+
+```bash
+go build -o bin/bench ./cmd/bench
+bin/bench -mock-server -mock-addr 127.0.0.1:9100   # 起高并发 mock
+# 用指向该 mock 的配置启动 nexus，然后：
+bin/bench -path /v1/chat/completions -method POST -key sk-nexus-smoke -c 50 -n 10000
+```
+
 ## 端点
 
 | 方法 | 路径 | 说明 |
@@ -145,7 +162,7 @@ nexus/
 - **阶段一（已完成）**：工程骨架 + 统一 LLM 网关核心（路由、负载均衡、熔断、重试、限流、鉴权、计量、指标、Docker、端到端冒烟）。
 - **阶段二（已完成）**：Agent 运行时 —— domain 模型、单一写入者引擎、Router/Worker 双层、事件总线、Effects/Outbox、工具插件协议（覆盖率 85.1%，`-race` 零竞态）。
 - **阶段三（已完成）**：算力调度 —— 算力池、优先级调度、filter/score 放置、配额、抢占、弹性伸缩（覆盖率 87.1%，`-race` 零竞态）。
-- **阶段四（进行中）**：生产化加固 —— 已完成安全加固（AES-256-GCM、JWT、RBAC，89.2%）、SQLite 持久化（纯 Go 无 cgo，重启不丢数据，86.6%）与 W3C 分布式追踪（零依赖，84.7%），均 `-race` 零竞态；待办管理控制台、高可用与压测。
+- **阶段四（进行中）**：生产化加固 —— 已完成安全加固（AES-256-GCM、JWT、RBAC，89.2%）、SQLite 持久化（纯 Go 无 cgo，86.6%）、W3C 分布式追踪（零依赖，84.7%）与压测基线（零依赖压测器，端到端 5 万+ req/s、p99 3ms 内），均 `-race` 零竞态；待办管理控制台、高可用部署。
 
 详见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
